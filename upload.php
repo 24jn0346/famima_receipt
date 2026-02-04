@@ -23,6 +23,7 @@ if (empty($_FILES['receipts'])) {
 }
 
 $files = $_FILES['receipts'];
+$base = getenv('HOME') . '/site/wwwroot';
 $uploadDir = __DIR__ . '/uploads';
 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
 
@@ -44,15 +45,29 @@ for ($i = 0; $i < count($files['name']); $i++) {
   $stored = 'uploads/' . uniqid('rcpt_', true) . '.' . $ext;
   $storedAbs = __DIR__ . '/' . $stored;
 
-  move_uploaded_file($tmpPath, $storedAbs);
+  // まず move_uploaded_file を試す
+$ok = move_uploaded_file($tmpPath, $storedAbs);
 
-  if (!move_uploaded_file($tmpPath, $storedAbs)) {
-    echo "UPLOAD MOVE FAILED\n";
+if (!$ok) {
+  // move_uploaded_file がダメな環境向けフォールバック
+  // 1) 本当にアップロード由来か確認ログ
+  $isUploaded = is_uploaded_file($tmpPath) ? "YES" : "NO";
+
+  // 2) copyで保存を試す（読み取りはできているので通ることが多い）
+  $ok = @copy($tmpPath, $storedAbs);
+
+  if (!$ok) {
+    echo "UPLOAD SAVE FAILED\n";
     echo "tmpPath={$tmpPath}\n";
     echo "storedAbs={$storedAbs}\n";
-    echo "is_writable(uploadDir)=" . (is_writable($uploadDir) ? "YES" : "NO") . "\n";
+    echo "is_uploaded_file(tmpPath)={$isUploaded}\n";
+    echo "uploadDir={$uploadDir} writable=" . (is_writable($uploadDir) ? "YES" : "NO") . "\n";
+    echo "storedAbs parent writable=" . (is_writable(dirname($storedAbs)) ? "YES" : "NO") . "\n";
+    echo "tmp readable=" . (is_readable($tmpPath) ? "YES" : "NO") . "\n";
     exit;
   }
+}
+
 
   $bytes = file_get_contents($storedAbs);
 
