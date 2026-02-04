@@ -1,15 +1,11 @@
 <?php
-ini_set('display_errors', '1');
-ini_set('display_startup_errors', '1');
-error_reporting(E_ALL);
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/vision_ocr.php';
-require_once __DIR__ . '/famima_parser.php';
+require_once __DIR__ . '/document_intel.php'; // ★変更
+// require_once __DIR__ . '/famima_parser.php'; // ★DIなら基本不要（残してもOK）
 
 date_default_timezone_set('Asia/Tokyo');
 
-function append_ocr_log(string $title, array $lines): void
-{
+function append_ocr_log(string $title, array $lines): void {
   $path = __DIR__ . '/ocr.log';
   $ts = date('Y-m-d H:i:s');
   $body = "==== {$ts} {$title} ====\n" . implode("\n", $lines) . "\n\n";
@@ -23,20 +19,14 @@ if (empty($_FILES['receipts'])) {
 }
 
 $files = $_FILES['receipts'];
-$base = getenv('HOME') . '/site/wwwroot';
 $uploadDir = __DIR__ . '/uploads';
 if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
 
 $pdo = db();
-
 $results = [];
 
 for ($i = 0; $i < count($files['name']); $i++) {
-  if ($files['error'][$i] !== UPLOAD_ERR_OK) {
-    echo "UPLOAD ERROR: " . $files['error'][$i] . " (file=" . $files['name'][$i] . ")\n";
-    exit;
-  }
-
+  if ($files['error'][$i] !== UPLOAD_ERR_OK) continue;
 
   $origName = $files['name'][$i];
   $tmpPath  = $files['tmp_name'][$i];
@@ -45,41 +35,23 @@ for ($i = 0; $i < count($files['name']); $i++) {
   $stored = 'uploads/' . uniqid('rcpt_', true) . '.' . $ext;
   $storedAbs = __DIR__ . '/' . $stored;
 
-  // まず move_uploaded_file を試す
-$ok = move_uploaded_file($tmpPath, $storedAbs);
-
-if (!$ok) {
-  // move_uploaded_file がダメな環境向けフォールバック
-  // 1) 本当にアップロード由来か確認ログ
-  $isUploaded = is_uploaded_file($tmpPath) ? "YES" : "NO";
-
-  // 2) copyで保存を試す（読み取りはできているので通ることが多い）
-  $ok = @copy($tmpPath, $storedAbs);
-
-  if (!$ok) {
-    echo "UPLOAD SAVE FAILED\n";
-    echo "tmpPath={$tmpPath}\n";
-    echo "storedAbs={$storedAbs}\n";
-    echo "is_uploaded_file(tmpPath)={$isUploaded}\n";
-    echo "uploadDir={$uploadDir} writable=" . (is_writable($uploadDir) ? "YES" : "NO") . "\n";
-    echo "storedAbs parent writable=" . (is_writable(dirname($storedAbs)) ? "YES" : "NO") . "\n";
-    echo "tmp readable=" . (is_readable($tmpPath) ? "YES" : "NO") . "\n";
+  if (!move_uploaded_file($tmpPath, $storedAbs)) {
+    http_response_code(500);
+    echo "UPLOAD MOVE FAILED tmpPath={$tmpPath} storedAbs={$storedAbs}";
     exit;
   }
-}
-
 
   $bytes = file_get_contents($storedAbs);
 
-  // OCR
-  $json = vision_read_ocr_bytes($bytes);
-  $ocrLines = ocr_lines_from_result($json);
+  // ★DIで解析
+  $json = di_analyze_receipt_bytes($bytes);
 
-  // OCR全文ログ（要件）
+  // ★ocr.log（DIのlines）
+  $ocrLines = di_lines_from_result($json);
   append_ocr_log($origName, $ocrLines);
 
-  // 抽出
-  $parsed = parse_famima_receipt($ocrLines);
+  // ★Items/Total をDI結果から抽出
+  $parsed = di_extract_items_total($json);
 
   // DB: receipts
   $stmt = $pdo->prepare("INSERT INTO receipts(uploaded_at, original_filename, stored_path, total_yen) VALUES (?,?,?,?)");
@@ -89,7 +61,6 @@ if (!$ok) {
   // DB: items
   $ins = $pdo->prepare("INSERT INTO receipt_items(receipt_id, item_name, price_yen) VALUES (?,?,?)");
   foreach ($parsed['items'] as $it) {
-    if ($it['name'] === '' || $it['price'] <= 0) continue;
     $ins->execute([$receiptId, $it['name'], $it['price']]);
   }
 
@@ -101,6 +72,8 @@ if (!$ok) {
   ];
 }
 ?>
+<!-- 以下 HTML はあなたの元のままでOK -->
+
 <!doctype html>
 <html lang="ja">
 
