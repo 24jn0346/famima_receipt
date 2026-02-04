@@ -11,7 +11,7 @@
 <body>
   <h1>ファミリーマート レシートOCR</h1>
 
-  <form action="upload.php" method="post" enctype="multipart/form-data">
+  <form action="/upload.php" method="post" enctype="multipart/form-data">
     <p>
       <input type="file" name="receipts[]" accept="image/*" multiple required>
     </p>
@@ -21,3 +21,4 @@
   <p style="color:#666;">※ファミリーマートのレシート3枚（テスト画像）だけ対応</p>
 </body>
 </html>
+
