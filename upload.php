@@ -1,11 +1,15 @@
 <?php
+ini_set('display_errors', '1');
+ini_set('display_startup_errors', '1');
+error_reporting(E_ALL);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/vision_ocr.php';
 require_once __DIR__ . '/famima_parser.php';
 
 date_default_timezone_set('Asia/Tokyo');
 
-function append_ocr_log(string $title, array $lines): void {
+function append_ocr_log(string $title, array $lines): void
+{
   $path = __DIR__ . '/ocr.log';
   $ts = date('Y-m-d H:i:s');
   $body = "==== {$ts} {$title} ====\n" . implode("\n", $lines) . "\n\n";
@@ -27,7 +31,11 @@ $pdo = db();
 $results = [];
 
 for ($i = 0; $i < count($files['name']); $i++) {
-  if ($files['error'][$i] !== UPLOAD_ERR_OK) continue;
+  if ($files['error'][$i] !== UPLOAD_ERR_OK) {
+    echo "UPLOAD ERROR: " . $files['error'][$i] . " (file=" . $files['name'][$i] . ")\n";
+    exit;
+  }
+
 
   $origName = $files['name'][$i];
   $tmpPath  = $files['tmp_name'][$i];
@@ -37,6 +45,14 @@ for ($i = 0; $i < count($files['name']); $i++) {
   $storedAbs = __DIR__ . '/' . $stored;
 
   move_uploaded_file($tmpPath, $storedAbs);
+
+  if (!move_uploaded_file($tmpPath, $storedAbs)) {
+    echo "UPLOAD MOVE FAILED\n";
+    echo "tmpPath={$tmpPath}\n";
+    echo "storedAbs={$storedAbs}\n";
+    echo "is_writable(uploadDir)=" . (is_writable($uploadDir) ? "YES" : "NO") . "\n";
+    exit;
+  }
 
   $bytes = file_get_contents($storedAbs);
 
@@ -72,16 +88,34 @@ for ($i = 0; $i < count($files['name']); $i++) {
 ?>
 <!doctype html>
 <html lang="ja">
+
 <head>
   <meta charset="utf-8">
   <title>解析結果</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    table{border-collapse:collapse;width:100%;max-width:720px}
-    th,td{border:1px solid #ccc;padding:6px}
-    .box{margin:16px 0;padding:12px;border:1px solid #ddd;border-radius:8px;max-width:720px}
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 720px
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 6px
+    }
+
+    .box {
+      margin: 16px 0;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      max-width: 720px
+    }
   </style>
 </head>
+
 <body>
   <h1>解析結果</h1>
 
@@ -99,20 +133,23 @@ for ($i = 0; $i < count($files['name']); $i++) {
 
       <table>
         <thead>
-          <tr><th>商品名</th><th>値段</th></tr>
+          <tr>
+            <th>商品名</th>
+            <th>値段</th>
+          </tr>
         </thead>
         <tbody>
-        <?php foreach ($r['items'] as $it): ?>
-          <tr>
-            <td><?= htmlspecialchars($it['name']) ?></td>
-            <td>¥<?= (int)$it['price'] ?></td>
-          </tr>
-        <?php endforeach; ?>
+          <?php foreach ($r['items'] as $it): ?>
+            <tr>
+              <td><?= htmlspecialchars($it['name']) ?></td>
+              <td>¥<?= (int)$it['price'] ?></td>
+            </tr>
+          <?php endforeach; ?>
         </tbody>
         <tfoot>
           <tr>
             <th>合計</th>
-            <th><?= $r['total'] !== null ? '¥'.(int)$r['total'] : '（未検出）' ?></th>
+            <th><?= $r['total'] !== null ? '¥' . (int)$r['total'] : '（未検出）' ?></th>
           </tr>
         </tfoot>
       </table>
@@ -123,4 +160,5 @@ for ($i = 0; $i < count($files['name']); $i++) {
     </div>
   <?php endforeach; ?>
 </body>
+
 </html>
