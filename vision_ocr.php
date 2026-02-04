@@ -11,7 +11,7 @@ function vision_read_ocr_bytes(string $imageBytes): array {
 
   // Image Analysis 4.0: POST /imageanalysis:analyze?features=read&api-version=2024-02-01
   // 画像ストリームも受け取れる（image/* or application/octet-stream）:contentReference[oaicite:3]{index=3}
-  $url = $endpoint . "/imageanalysis:analyze?features=read&language=ja&api-version=2024-02-01";
+  $url = $endpoint . "/computervision/imageanalysis:analyze?features=read&language=ja&api-version=2024-02-01";
 
   $ch = curl_init($url);
   curl_setopt_array($ch, [
